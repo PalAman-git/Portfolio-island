@@ -1,14 +1,20 @@
 import Sky from "../models/Sky";
 import { Canvas } from "@react-three/fiber";
-import { Suspense } from "react";
+import { Suspense,useState,useEffect,useRef } from "react";
 import Loader from "../components/Loader";
 import Island from "../models/Island";
 import Bird from "../models/Bird";
 import Plane from "../models/Plane";
-import { useState } from "react";
 import HomeInfo from "../components/HomeInfo";
 
+import sakura from '../assets/sakura.mp3'
+import { soundoff,soundon } from "../assets/icons";
+
 const Home = () => {
+  const audioRef = useRef(new Audio(sakura));
+  audioRef.current.volume = 0.3;
+  audioRef.current.loop = true
+
   const adjustIslandForScreenSize = () => {
     let screenScale = null;
     let screenPosition = [0, -6.5, -43];
@@ -42,6 +48,27 @@ const Home = () => {
   const [planePosition, planeScale] = adjustPlandForScreenSize();
   const [islandPosition, islandScale, islandRotation] =adjustIslandForScreenSize();
   const [isRotating, setIsRotating] = useState(false);
+  const [isPlayingMusic, setIsPlayingMusic] = useState(false);
+
+  
+  const toggle = () => {
+    if(isPlayingMusic)
+    {
+      setIsPlayingMusic(false);
+    }else{
+      setIsPlayingMusic(true);
+    }
+  }
+
+
+  useEffect(() => {
+    if(isPlayingMusic) audioRef.current.play();
+     
+    return () => {
+      audioRef.current.pause();
+    }
+
+  },[isPlayingMusic])
 
   return (
     <section className="w-full h-screen">
@@ -72,12 +99,15 @@ const Home = () => {
           />
           <Plane
             isRotating={isRotating}
-            planePosition={planePosition}
-            planeScale={planeScale}
+            position={planePosition}
+            scale={planeScale}
             rotation={[0, 20, 0]}
           />
         </Suspense>
       </Canvas>
+      <div className="absolute bottom-2 left-2">
+        <img src={isPlayingMusic ? soundon : soundoff} className="h-10 w-10 cursor-pointer" onClick={toggle}/>
+      </div>
     </section>
   );
 };

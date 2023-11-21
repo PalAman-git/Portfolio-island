@@ -1,95 +1,159 @@
-/* eslint-disable react/no-unknown-property */
-import { useRef,useEffect } from "react";
+/**
+ * IMPORTANT: Loading glTF models into a Three.js scene is a lot of work.
+ * Before we can configure or animate our model’s meshes, we need to iterate through
+ * each part of our model’s meshes and save them separately.
+ *
+ * But luckily there is an app that turns gltf or glb files into jsx components
+ * For this model, visit https://gltf.pmnd.rs/
+ * And get the code. And then add the rest of the things.
+ * YOU DON'T HAVE TO WRITE EVERYTHING FROM SCRATCH
+ */
+
+import { a } from "@react-spring/three";
+import { useEffect, useRef } from "react";
 import { useGLTF } from "@react-three/drei";
-import { useThree,useFrame } from "@react-three/fiber";
+import { useFrame, useThree } from "@react-three/fiber";
 
-import islandScene from '../assets/3d/island.glb'
-import { a } from '@react-spring/three'
-import { useState } from "react";
+import islandScene from "../assets/3d/island.glb";
 
-const Island = ({isRotating,setIsRotating,setCurrentStage,...props}) => {
-
+const Island = ({
+  isRotating,
+  setIsRotating,
+  setCurrentStage,
+  currentFocusPoint,
+  ...props
+}) => {
   const islandRef = useRef();
-
-  const {gl,viewport } = useThree();
+  // Get access to the Three.js renderer and viewport
+  const { gl, viewport } = useThree();
   const { nodes, materials } = useGLTF(islandScene);
 
+  // Use a ref for the last mouse x position
   const lastX = useRef(0);
+  // Use a ref for rotation speed
   const rotationSpeed = useRef(0);
+  // Define a damping factor to control rotation damping
   const dampingFactor = 0.95;
 
-
-  const handlePointerDown = (e) => {
-    e.stopPropagation();
-    e.preventDefault();
+  // Handle pointer (mouse or touch) down event
+  const handlePointerDown = (event) => {
+    event.stopPropagation();
+    event.preventDefault();
     setIsRotating(true);
 
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX ;//checking if it is touch screen or normal screen
+    // Calculate the clientX based on whether it's a touch event or a mouse event
+    const clientX = event.touches ? event.touches[0].clientX : event.clientX;
+
+    // Store the current clientX position for reference
     lastX.current = clientX;
+  };
 
-  }
-  const handlePointerUp = (e) => {
-    e.stopPropagation();
-    e.preventDefault();
-
+  // Handle pointer (mouse or touch) up event
+  const handlePointerUp = (event) => {
+    event.stopPropagation();
+    event.preventDefault();
     setIsRotating(false);
-  }
+  };
 
-  const handlePointerMove = (e) => {
-    e.stopPropagation();
-    e.preventDefault();
+  // Handle pointer (mouse or touch) move event
+  const handlePointerMove = (event) => {
+    event.stopPropagation();
+    event.preventDefault();
+    if (isRotating) {
+      // If rotation is enabled, calculate the change in clientX position
+      const clientX = event.touches ? event.touches[0].clientX : event.clientX;
 
-    if(isRotating) {
-      const clientX = e.touches? e.touches[0].clientX : e.clientX ;//checking if it is touch screen or normal screen
-      const delta = (clientX - lastX.current)/viewport.width; //kitna move kiya
+      // calculate the change in the horizontal position of the mouse cursor or touch input,
+      // relative to the viewport's width
+      const delta = (clientX - lastX.current) / viewport.width;
 
-      islandRef.current.rotation.y += delta * 0.01 * Math.PI
-      lastX.current = clientX;//update the last X
-      rotationSpeed.current = delta * 0.01 * Math.PI
+      // Update the island's rotation based on the mouse/touch movement
+      islandRef.current.rotation.y += delta * 0.01 * Math.PI;
+
+      // Update the reference for the last clientX position
+      lastX.current = clientX;
+
+      // Update the rotation speed
+      rotationSpeed.current = delta * 0.01 * Math.PI;
     }
-  }
+  };
 
-  const handleKeyDown = (e) => {
-    if(e.key === 'ArrowLeft')
-    {
-      if(!isRotating) setIsRotating(true);
-      islandRef.current.rotation.y += 0.01 * Math.PI
-    }else if(e.key === 'ArrowRight'){
-      if(!isRotating) setIsRotating(true);
-      islandRef.current.rotation.y -= 0.01 * Math.PI
+  // Handle keydown events
+  const handleKeyDown = (event) => {
+    if (event.key === "ArrowLeft") {
+      if (!isRotating) setIsRotating(true);
+
+      islandRef.current.rotation.y += 0.005 * Math.PI;
+      rotationSpeed.current = 0.007;
+    } else if (event.key === "ArrowRight") {
+      if (!isRotating) setIsRotating(true);
+
+      islandRef.current.rotation.y -= 0.005 * Math.PI;
+      rotationSpeed.current = -0.007;
     }
+  };
 
-  }
-
-  const handlekeyUp = (e) => {
-    if(e.key === 'ArrowLeft' || e.key === 'ArrowRight'){
+  // Handle keyup events
+  const handleKeyUp = (event) => {
+    if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
       setIsRotating(false);
     }
-  }
+  };
 
+  useEffect(() => {
+    // Add event listeners for pointer and keyboard events
+    const canvas = gl.domElement;
+    canvas.addEventListener("pointerdown", handlePointerDown);
+    canvas.addEventListener("pointerup", handlePointerUp);
+    canvas.addEventListener("pointermove", handlePointerMove);
+    window.addEventListener("keydown", handleKeyDown);
+    window.addEventListener("keyup", handleKeyUp);
+
+    // Remove event listeners when component unmounts
+    return () => {
+      canvas.removeEventListener("pointerdown", handlePointerDown);
+      canvas.removeEventListener("pointerup", handlePointerUp);
+      canvas.removeEventListener("pointermove", handlePointerMove);
+      window.removeEventListener("keydown", handleKeyDown);
+      window.removeEventListener("keyup", handleKeyUp);
+    };
+  }, [gl, handlePointerDown, handlePointerUp, handlePointerMove]);
+
+  // This function is called on each frame update
   useFrame(() => {
-    if(!isRotating){
-      rotationSpeed.current *= dampingFactor
+    // If not rotating, apply damping to slow down the rotation (smoothly)
+    if (!isRotating) {
+      // Apply damping factor
+      rotationSpeed.current *= dampingFactor;
 
-      if(Math.abs(rotationSpeed.current) < 0.001) {
+      // Stop rotation when speed is very small
+      if (Math.abs(rotationSpeed.current) < 0.001) {
         rotationSpeed.current = 0;
       }
-      islandRef.current.rotation.y += rotationSpeed.current
-    }else {
+
+      islandRef.current.rotation.y += rotationSpeed.current;
+    } else {
+      // When rotating, determine the current stage based on island's orientation
       const rotation = islandRef.current.rotation.y;
 
       /**
-      * 
-      Here's a breakdown:
-
-      rotation % (2 * Math.PI): This part calculates the remainder when rotation is divided by 2 * Math.PI. This ensures that rotation is within the range of 0 to 2 * Math.PI.
-
-      + 2 * Math.PI: This is added to the result from the previous step. This step is necessary to handle negative values of rotation and make sure that the result is always positive.
-
-      % (2 * Math.PI): This part ensures that the final result is again within the range of 0 to 2 * Math.PI. This step is useful if the addition in the previous step caused the value to go beyond this range.
-
+       * Normalize the rotation value to ensure it stays within the range [0, 2 * Math.PI].
+       * The goal is to ensure that the rotation value remains within a specific range to
+       * prevent potential issues with very large or negative rotation values.
+       *  Here's a step-by-step explanation of what this code does:
+       *  1. rotation % (2 * Math.PI) calculates the remainder of the rotation value when divided
+       *     by 2 * Math.PI. This essentially wraps the rotation value around once it reaches a
+       *     full circle (360 degrees) so that it stays within the range of 0 to 2 * Math.PI.
+       *  2. (rotation % (2 * Math.PI)) + 2 * Math.PI adds 2 * Math.PI to the result from step 1.
+       *     This is done to ensure that the value remains positive and within the range of
+       *     0 to 2 * Math.PI even if it was negative after the modulo operation in step 1.
+       *  3. Finally, ((rotation % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI) applies another
+       *     modulo operation to the value obtained in step 2. This step guarantees that the value
+       *     always stays within the range of 0 to 2 * Math.PI, which is equivalent to a full
+       *     circle in radians.
        */
-      const normalizedRotation =((rotation % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+      const normalizedRotation =
+        ((rotation % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
 
       // Set the current stage based on the island's orientation
       switch (true) {
@@ -109,27 +173,10 @@ const Island = ({isRotating,setIsRotating,setCurrentStage,...props}) => {
           setCurrentStage(null);
       }
     }
-  })
-
-  useEffect(() => {
-    const canvas = gl.domElement; //we are adding the event listner to the canvas not the dom 
-    canvas.addEventListener('pointerdown',handlePointerDown);
-    canvas.addEventListener('pointerup',handlePointerUp);
-    canvas.addEventListener('pointermove',handlePointerMove);
-    document.addEventListener('keydown',handleKeyDown);
-    document.addEventListener('keyup',handlekeyUp);
-
-    return () => {
-      canvas.removeEventListener('pointerdown',handlePointerDown);
-      canvas.removeEventListener('pointerup',handlePointerUp);
-      canvas.removeEventListener('pointermove',handlePointerMove);
-      document.removeEventListener('keydown',handleKeyDown);
-      document.removeEventListener('keyup',handlekeyUp);
-    }
-
-  },[gl,handlePointerUp,handlePointerDown,handlePointerMove])
+  });
 
   return (
+    // {Island 3D model from: https://sketchfab.com/3d-models/foxs-islands-163b68e09fcc47618450150be7785907}
     <a.group ref={islandRef} {...props}>
       <mesh
         geometry={nodes.polySurface944_tree_body_0.geometry}
